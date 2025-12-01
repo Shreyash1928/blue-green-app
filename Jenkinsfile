@@ -2,51 +2,43 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "bluegreen-app"
-        VERSION = "v1"
+        BLUE_IMAGE = "blue-app:v1"
+        GREEN_IMAGE = "green-app:v2"
     }
 
     stages {
-
         stage('Clone Repository') {
             steps {
                 git branch: 'main', url: 'https://github.com/Shreyash1928/blue-green-app'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build Docker Images') {
             steps {
-                sh "docker build -t ${IMAGE_NAME}:${VERSION} ."
+                script {
+                    echo "Building BLUE and GREEN images"
+                    sh "docker build -t $BLUE_IMAGE ."
+                    sh "docker build -t $GREEN_IMAGE ."
+                }
             }
         }
 
         stage('Blue-Green Deployment') {
             steps {
                 script {
-                    echo "Checking if BLUE container is running..."
                     def BLUE = sh(script: "docker ps --filter name=blue-app -q", returnStdout: true).trim()
 
                     if (BLUE) {
-                        // BLUE is running → Deploy GREEN
-                        echo "BLUE is running → Deploying GREEN on port 8082"
+                        echo "BLUE is running → Deploying GREEN on 8082"
                         sh """
                             docker rm -f green-app || true
-                            docker run -d \
-                                -p 8082:8080 \
-                                --name green-app \
-                                -e DEPLOY_COLOR=green \
-                                ${IMAGE_NAME}:${VERSION}
+                            docker run -d -p 8082:8080 --name green-app $GREEN_IMAGE
                         """
                     } else {
-                        // BLUE NOT running → Deploy BLUE
-                        echo "BLUE is NOT running → Deploying BLUE on port 8081"
+                        echo "BLUE is NOT running → Deploying BLUE on 8081"
                         sh """
                             docker rm -f blue-app || true
-                            docker run -d \
-                                -p 8081:8080 \
-                                --name blue-app \
-                                -e DEPLOY_COLOR=blue \
-                                ${IMAGE_NAME}:${VERSION}
+                            docker run -d -p 8081:8080 --name blue-app $BLUE_IMAGE
                         """
                     }
                 }
@@ -56,7 +48,7 @@ pipeline {
 
     post {
         success {
-            echo "Blue-Green Deployment Successful!"
+            echo "Access URLs:"
             echo "BLUE  → http://localhost:8081"
             echo "GREEN → http://localhost:8082"
         }
